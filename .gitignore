@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Xcode — user-specific state (not shared)
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# Build output
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager / local build
+.build/
+.swiftpm/
+Packages/
+
+# Logs
+*.log
+
+# Machine-specific tooling (xcode-build-server, nvim, etc.)
+buildServer.json
+.cache/
