@@ -7,7 +7,6 @@ final class PopupController {
 
   private var panel: PopupPanel?
   private var globalClickMonitor: Any?
-  private var previousFrontmostBundleId: String?
   private var isDismissing = false
 
   var isVisible: Bool { panel?.isVisible == true }
@@ -16,6 +15,7 @@ final class PopupController {
 
   func show(
     card: Card,
+    deckName: String,
     promptSide: Deck.PromptSide = .front,
     corner: AppSettings.PopupCorner = .topRight,
     onGrade: @escaping (Grade) -> Void,
@@ -25,6 +25,7 @@ final class PopupController {
 
     let root = CardView(
       card: card,
+      deckName: deckName,
       promptSide: promptSide,
       onGrade: { [weak self] grade in
         onGrade(grade)
@@ -79,7 +80,6 @@ final class PopupController {
     animateOut(panel) { [weak self] in
       self?.panel = nil
       self?.isDismissing = false
-      self?.restorePreviousApp()
     }
   }
 
@@ -91,18 +91,16 @@ final class PopupController {
     corner: AppSettings.PopupCorner,
     onOutsideClick: @escaping () -> Void
   ) {
-    // Remember which app was frontmost, then activate ourselves so the panel
-    // can receive keystrokes (Space to flip, arrows to grade).
-    previousFrontmostBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-    NSApp.activate(ignoringOtherApps: true)
-
-    let host = NSHostingView(rootView: view)
+    // Show the card on top of everything without activating the app or taking
+    // key status, so it never interrupts whatever the user is typing. It's
+    // operated entirely with the mouse; PopupHostingView makes a single click
+    // land on the buttons even though the app stays inactive.
+    let host = PopupHostingView(rootView: view)
     host.frame = NSRect(origin: .zero, size: size)
 
     let newPanel = PopupPanel(contentView: host, size: size)
     position(newPanel, corner: corner)
-    animateIn(newPanel)
-    newPanel.makeKeyAndOrderFront(nil)  // become key so SwiftUI gets key events
+    animateIn(newPanel)  // orders the panel front (orderFrontRegardless), no focus change
     panel = newPanel
 
     globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
@@ -111,14 +109,6 @@ final class PopupController {
       onOutsideClick()
       self?.dismiss()
     }
-  }
-
-  private func restorePreviousApp() {
-    defer { previousFrontmostBundleId = nil }
-    guard let bid = previousFrontmostBundleId,
-      let prev = NSRunningApplication.runningApplications(withBundleIdentifier: bid).first
-    else { return }
-    prev.activate()
   }
 
   private func position(_ panel: PopupPanel, corner: AppSettings.PopupCorner) {

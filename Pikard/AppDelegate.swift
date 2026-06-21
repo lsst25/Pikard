@@ -198,9 +198,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   @objc private func showNextCardNow() {
     if let next = SRSAlgorithm.selectNextCard(decks: appState.decks) {
-      let side = appState.decks.first { $0.id == next.deckId }?.promptSide ?? .front
+      let deck = appState.decks.first { $0.id == next.deckId }
+      let side = deck?.promptSide ?? .front
       popup.show(
         card: next.card,
+        deckName: deck?.name ?? "",
         promptSide: side,
         corner: appState.settings.popupCorner,
         onGrade: { [weak self] grade in

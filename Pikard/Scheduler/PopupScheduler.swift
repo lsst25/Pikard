@@ -21,6 +21,8 @@ final class PopupScheduler: ObservableObject {
   // MARK: Tuning
   var jitterFraction: Double = 0.2
   private let minimumDelay: TimeInterval = 5
+  /// How often to re-check while the screen is being shared (no stop event exists).
+  private let screenShareRecheckDelay: TimeInterval = 30
 
   // MARK: GCD
   private var timer: DispatchSourceTimer?
@@ -127,6 +129,10 @@ extension PopupScheduler {
     if appState.settings.isQuietHour(at: now) {
       return appState.settings.secondsUntilQuietEnds(now: now) + 30
     }
+    // Screen sharing/recording: there's no "stopped" notification, so poll.
+    if ScreenShareDetector.isScreenBeingCaptured {
+      return screenShareRecheckDelay
+    }
     // Base interval + jitter band.
     let base = appState.settings.intervalMinutes * 60
     let jitter = base * jitterFraction * Double.random(in: -1...1)
@@ -144,6 +150,11 @@ extension PopupScheduler {
       scheduleNext()
       return
     }
+    // Never pop a card while the screen is being shared/recorded.
+    if ScreenShareDetector.isScreenBeingCaptured {
+      scheduleNext()
+      return
+    }
     if popup.isVisible {
       // Don't pile up popups; try again after one interval.
       scheduleNext()
@@ -151,10 +162,11 @@ extension PopupScheduler {
     }
 
     if let next = SRSAlgorithm.selectNextCard(decks: appState.decks) {
-      let side =
-        appState.decks.first { $0.id == next.deckId }?.promptSide ?? .front
+      let deck = appState.decks.first { $0.id == next.deckId }
+      let side = deck?.promptSide ?? .front
       popup.show(
         card: next.card,
+        deckName: deck?.name ?? "",
         promptSide: side,
         corner: appState.settings.popupCorner,
         onGrade: { [weak self] grade in

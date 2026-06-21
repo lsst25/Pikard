@@ -3,6 +3,7 @@ import SwiftUI
 struct CardView: View {
 
   let card: Card
+  let deckName: String
   let onGrade: (Grade) -> Void
   let onDismiss: () -> Void
 
@@ -14,11 +15,13 @@ struct CardView: View {
 
   init(
     card: Card,
+    deckName: String,
     promptSide: Deck.PromptSide = .front,
     onGrade: @escaping (Grade) -> Void,
     onDismiss: @escaping () -> Void
   ) {
     self.card = card
+    self.deckName = deckName
     self.onGrade = onGrade
     self.onDismiss = onDismiss
     switch promptSide {
@@ -52,8 +55,8 @@ struct CardView: View {
       }
 
       boxDot
+      deckLabel
       dismissButton
-      keyboardShortcuts
     }
     .onChange(of: card.id) { _, _ in
       showingAnswer = false
@@ -73,7 +76,7 @@ struct CardView: View {
         .multilineTextAlignment(.center)
         .lineLimit(4)
         .minimumScaleFactor(0.6)
-      Text("Click or press Space to flip")
+      Text("Click to flip")
         .font(.caption)
         .foregroundStyle(.tertiary)
       Spacer()
@@ -114,7 +117,6 @@ struct CardView: View {
       }
       .buttonStyle(.borderedProminent)
       .tint(.red)
-      .keyboardShortcut(.leftArrow, modifiers: [])
 
       Button(action: { if showingAnswer { onGrade(.known) } }) {
         Label("I know it", systemImage: "checkmark")
@@ -122,7 +124,6 @@ struct CardView: View {
       }
       .buttonStyle(.borderedProminent)
       .tint(.green)
-      .keyboardShortcut(.rightArrow, modifiers: [])
     }
     .controlSize(.large)
     .padding(.top, 8)
@@ -146,6 +147,24 @@ struct CardView: View {
       Spacer()
     }
     .padding(6)
+  }
+
+  private var deckLabel: some View {
+    VStack {
+      HStack {
+        Text(deckName)
+          .font(.caption)
+          .fontWeight(.medium)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+        Spacer(minLength: 0)
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.top, 12)
+    .padding(.leading, 14)
+    .padding(.trailing, 40)  // leave room for the close button
   }
 
   private var boxDot: some View {
@@ -172,19 +191,6 @@ struct CardView: View {
     }
   }
 
-  // Invisible buttons that register Space (flip) and Esc (dismiss) so the
-  // popup grades from the keyboard once it becomes the key window.
-  private var keyboardShortcuts: some View {
-    ZStack {
-      Button(action: flip) {}
-        .keyboardShortcut(.space, modifiers: [])
-      Button(action: onDismiss) {}
-        .keyboardShortcut(.escape, modifiers: [])
-    }
-    .opacity(0)
-    .frame(width: 0, height: 0)
-  }
-
   private func flip() {
     withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
       showingAnswer.toggle()
@@ -195,6 +201,7 @@ struct CardView: View {
 #Preview("Front prompt") {
   CardView(
     card: Card(front: "Bonjour", back: "Hello"),
+    deckName: "French Basics",
     promptSide: .front,
     onGrade: { _ in }, onDismiss: {})
 }
@@ -202,6 +209,7 @@ struct CardView: View {
 #Preview("Back prompt") {
   CardView(
     card: Card(front: "Bonjour", back: "Hello"),
+    deckName: "French Basics",
     promptSide: .back,
     onGrade: { _ in }, onDismiss: {})
 }
