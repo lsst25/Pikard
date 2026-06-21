@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var importController: ImportWindowController?
   private var settingsController: SettingsWindowController?
   private var deckManagerController: DeckManagerWindowController?
+  private var studyController: StudyWindowController?
 
   private static let timeFormatter: DateFormatter = {
     let f = DateFormatter()
@@ -129,6 +130,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       title: "Show next card now", action: #selector(showNextCardNow), keyEquivalent: "")
     nowItem.target = self
     menu.addItem(nowItem)
+
+    let studyItem = NSMenuItem(
+      title: "Study…", action: #selector(openStudy), keyEquivalent: "s")
+    studyItem.target = self
+    menu.addItem(studyItem)
 
     let statusRow = NSMenuItem(title: nextFireLabel, action: nil, keyEquivalent: "")
     statusRow.isEnabled = false
@@ -245,6 +251,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   @objc private func toggleDeck(_ sender: NSMenuItem) {
     guard let id = sender.representedObject as? UUID else { return }
     appState.toggleActive(deckId: id)
+  }
+
+  @objc private func openStudy() {
+    if studyController == nil {
+      studyController = StudyWindowController(appState: appState) { [weak self] in
+        self?.studyController = nil
+      }
+    }
+    studyController?.show()
   }
 
   @objc private func openDeckManager() {

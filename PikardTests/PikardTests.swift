@@ -191,6 +191,82 @@ final class SRSAlgorithmTests: XCTestCase {
   }
 }
 
+final class StudySessionTests: XCTestCase {
+
+  private func dueCard(_ front: String, dueIn seconds: TimeInterval, now: Date) -> Card {
+    var card = Card(front: front, back: "\(front)-back")
+    card.srs.dueAt = now.addingTimeInterval(seconds)
+    return card
+  }
+
+  func test_allDecksGathersEveryCard() {
+    let now = Date()
+    let a = Deck(name: "A", cards: [dueCard("a1", dueIn: -10, now: now)])
+    let b = Deck(name: "B", cards: [
+      dueCard("b1", dueIn: -5, now: now), dueCard("b2", dueIn: 100, now: now),
+    ])
+    let queue = StudySession.buildQueue(decks: [a, b], scope: .allDecks)
+    XCTAssertEqual(queue.count, 3)
+  }
+
+  // Study is deliberate, so inactive decks are still included under "All decks".
+  func test_allDecksIncludesInactiveDecks() {
+    let now = Date()
+    var inactive = Deck(name: "Off", cards: [dueCard("x", dueIn: -10, now: now)])
+    inactive.isActive = false
+    let queue = StudySession.buildQueue(decks: [inactive], scope: .allDecks)
+    XCTAssertEqual(queue.count, 1)
+  }
+
+  func test_deckScopeFiltersToThatDeck() {
+    let now = Date()
+    let a = Deck(name: "A", cards: [dueCard("a1", dueIn: -10, now: now)])
+    let b = Deck(name: "B", cards: [dueCard("b1", dueIn: -5, now: now)])
+    let queue = StudySession.buildQueue(decks: [a, b], scope: .deck(b.id))
+    XCTAssertEqual(queue.count, 1)
+    XCTAssertEqual(queue.first?.deckId, b.id)
+  }
+
+  func test_orderedMostOverdueFirstThenSoonest() {
+    let now = Date()
+    // Built in deliberately wrong order to prove sorting happens.
+    let deck = Deck(name: "D", cards: [
+      dueCard("upcoming-late", dueIn: 3600, now: now),
+      dueCard("most-overdue", dueIn: -1000, now: now),
+      dueCard("upcoming-soon", dueIn: 60, now: now),
+      dueCard("less-overdue", dueIn: -100, now: now),
+    ])
+    let fronts = StudySession.buildQueue(decks: [deck], scope: .allDecks)
+      .compactMap { item in
+        deck.cards.first { $0.id == item.cardId }?.front
+      }
+    XCTAssertEqual(
+      fronts, ["most-overdue", "less-overdue", "upcoming-soon", "upcoming-late"])
+  }
+
+  func test_promptSideResolvesFrontAndBack() {
+    let now = Date()
+    var frontDeck = Deck(name: "F", cards: [dueCard("f", dueIn: 0, now: now)])
+    frontDeck.promptSide = .front
+    var backDeck = Deck(name: "B", cards: [dueCard("b", dueIn: 0, now: now)])
+    backDeck.promptSide = .back
+
+    XCTAssertEqual(
+      StudySession.buildQueue(decks: [frontDeck], scope: .allDecks).first?.promptIsFront,
+      true)
+    XCTAssertEqual(
+      StudySession.buildQueue(decks: [backDeck], scope: .allDecks).first?.promptIsFront,
+      false)
+  }
+
+  func test_emptyAndMissingScopesYieldEmptyQueue() {
+    XCTAssertTrue(StudySession.buildQueue(decks: [], scope: .allDecks).isEmpty)
+    let deck = Deck(name: "D", cards: [Card(front: "a", back: "b")])
+    XCTAssertTrue(
+      StudySession.buildQueue(decks: [deck], scope: .deck(UUID())).isEmpty)
+  }
+}
+
 final class AppSettingsTests: XCTestCase {
 
   private func makeSettings(
