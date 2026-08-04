@@ -43,6 +43,7 @@ Everything is driven by `AppDelegate` (via `@NSApplicationDelegateAdaptor`); `Pi
 - Holds exactly one pending one-shot `DispatchSourceTimer` aimed at the next fire, and reschedules itself after each fire. Not a repeating timer.
 - Every fire re-checks all gates before showing a card: running, `pausedUntil`, quiet hours, **screen sharing**, and popup-already-visible. Delay = `intervalMinutes` ± jitter (`jitterFraction`).
 - Re-fires on `NSWorkspace.didWakeNotification` since GCD timers don't catch up after sleep.
+- **Batch runs** (`showCardRun()`): the single entry point for putting a card on screen, used both by the timer and by the menu's "Show next card now". With `settings.batchSize == 1` it's the classic one-card popup. Above 1, a Known / Still-learning grade *replaces* the card in the same panel (`PopupController.replace`) instead of closing it; a neutral dismissal (✕ / outside click) ends the run. The run is capped at `min(cardsPerRun, dueCount)` and skips cards already shown in it (`runShown`), so a card can't come back around mid-batch. The cadence is reset only when the run finishes, so a longer `intervalMinutes` + a batch is the intended pairing.
 
 **SRS — `SRSAlgorithm` (pure, stateless enum)**
 - Leitner system: 6 boxes, intervals 5 min → 7 days. `grade()` moves a card up/down a box; `selectNextCard()` picks the oldest-due card (random among ties) from active decks; `dueCount()` feeds the menu-bar badge. All take an injectable `now:` for testability.

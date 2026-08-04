@@ -47,30 +47,44 @@ extension SRSAlgorithm {
     now: Date = Date()
   ) -> (card: Card, deckId: UUID)? {
 
-    // Flatten active decks into (deck, card) pairs.
-    let pool: [(Deck, Card)] =
-      decks
-      .filter { $0.isActive }
-      .flatMap { deck in deck.cards.map { (deck, $0) } }
+    if let due = selectNextDueCard(decks: decks, now: now) { return due }
 
-    guard !pool.isEmpty else { return nil }
+    // Nothing due; pick the soonest-upcoming card so the user is never told "nothing".
+    let pool = activePool(decks)
+    guard let soonest = pool.min(by: { $0.1.srs.dueAt < $1.1.srs.dueAt }) else {
+      return nil
+    }
+    return (soonest.1, soonest.0.id)
+  }
+
+  /// Return the most-overdue card that is *actually* due, skipping any card in
+  /// `excluding`. Unlike `selectNextCard` this has no soonest-upcoming fallback:
+  /// nil means "nothing left to review right now", which is what lets a batch
+  /// run stop instead of re-showing cards that aren't due yet.
+  static func selectNextDueCard(
+    decks: [Deck],
+    excluding: Set<UUID> = [],
+    now: Date = Date()
+  ) -> (card: Card, deckId: UUID)? {
 
     // Cards already due, oldest first.
     let due =
-      pool
-      .filter { $0.1.srs.dueAt <= now }
+      activePool(decks)
+      .filter { $0.1.srs.dueAt <= now && !excluding.contains($0.1.id) }
       .sorted { $0.1.srs.dueAt < $1.1.srs.dueAt }
 
-    if let oldest = due.first?.1.srs.dueAt {
-      // Take every card sharing the oldest dueAt (tie band), pick one at random.
-      let ties = due.filter { $0.1.srs.dueAt == oldest }
-      let pick = ties.randomElement() ?? due[0]
-      return (pick.1, pick.0.id)
-    }
+    guard let oldest = due.first?.1.srs.dueAt else { return nil }
+    // Take every card sharing the oldest dueAt (tie band), pick one at random.
+    let ties = due.filter { $0.1.srs.dueAt == oldest }
+    let pick = ties.randomElement() ?? due[0]
+    return (pick.1, pick.0.id)
+  }
 
-    // Nothing due; pick the soonest-upcoming card so the user is never told "nothing".
-    let soonest = pool.min { $0.1.srs.dueAt < $1.1.srs.dueAt }!
-    return (soonest.1, soonest.0.id)
+  /// Flatten active decks into (deck, card) pairs.
+  private static func activePool(_ decks: [Deck]) -> [(Deck, Card)] {
+    decks
+      .filter { $0.isActive }
+      .flatMap { deck in deck.cards.map { (deck, $0) } }
   }
 
   /// Count of cards from active decks with `dueAt <= now`.

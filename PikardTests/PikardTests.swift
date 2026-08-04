@@ -176,6 +176,45 @@ final class SRSAlgorithmTests: XCTestCase {
     XCTAssertNil(result)
   }
 
+  func test_selectNextDueCardReturnsNilWhenNothingDue() {
+    let now = Date()
+    var future = Card(front: "A", back: "1")
+    future.srs.dueAt = now.addingTimeInterval(60)
+    let deck = Deck(name: "Test", cards: [future])
+
+    // No soonest-upcoming fallback here — that's what ends a batch run.
+    XCTAssertNil(SRSAlgorithm.selectNextDueCard(decks: [deck], now: now))
+    XCTAssertNotNil(SRSAlgorithm.selectNextCard(decks: [deck], now: now))
+  }
+
+  func test_selectNextDueCardSkipsExcludedCards() {
+    let now = Date()
+    var first = Card(front: "A", back: "1")
+    first.srs.dueAt = now.addingTimeInterval(-1000)
+    var second = Card(front: "B", back: "2")
+    second.srs.dueAt = now.addingTimeInterval(-100)
+    let deck = Deck(name: "Test", cards: [first, second])
+
+    let picked = SRSAlgorithm.selectNextDueCard(
+      decks: [deck], excluding: [first.id], now: now)
+    XCTAssertEqual(picked?.card.front, "B")
+
+    // Every due card already seen in this run ⇒ the run is over.
+    XCTAssertNil(
+      SRSAlgorithm.selectNextDueCard(
+        decks: [deck], excluding: [first.id, second.id], now: now))
+  }
+
+  func test_selectNextDueCardSkipsInactiveDecks() {
+    let now = Date()
+    var card = Card(front: "Hidden", back: "Skip")
+    card.srs.dueAt = now.addingTimeInterval(-1000)
+    var deck = Deck(name: "Off", cards: [card])
+    deck.isActive = false
+
+    XCTAssertNil(SRSAlgorithm.selectNextDueCard(decks: [deck], now: now))
+  }
+
   func test_dueCountIgnoresFutureAndInactive() {
     let now = Date()
     var dueCard = Card(front: "A", back: "1")
@@ -321,6 +360,20 @@ final class AppSettingsTests: XCTestCase {
     XCTAssertEqual(s.popupCorner, .topRight)
     XCTAssertFalse(s.quietHoursEnabled)
     XCTAssertFalse(s.launchAtLogin)
+    XCTAssertEqual(s.batchSize, 1)  // behaves exactly like the pre-batch app
+    XCTAssertEqual(s.cardsPerRun, 1)
+  }
+
+  func test_cardsPerRunClampsGarbage() {
+    var s = AppSettings()
+    s.batchSize = 0
+    XCTAssertEqual(s.cardsPerRun, 1)
+    s.batchSize = -3
+    XCTAssertEqual(s.cardsPerRun, 1)
+    s.batchSize = 5
+    XCTAssertEqual(s.cardsPerRun, 5)
+    s.batchSize = 9_999
+    XCTAssertEqual(s.cardsPerRun, AppSettings.maxBatchSize)
   }
 
   func test_codableRoundTrip() throws {
@@ -328,9 +381,29 @@ final class AppSettingsTests: XCTestCase {
     s.intervalMinutes = 42
     s.popupCorner = .bottomLeft
     s.quietHoursEnabled = true
+    s.batchSize = 4
     let data = try JSONEncoder().encode(s)
     let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
     XCTAssertEqual(decoded, s)
+  }
+
+  // Settings saved before batchSize existed must still load, with batching off.
+  func test_decodesLegacySettingsWithoutBatchSize() throws {
+    let json = """
+      {
+        "intervalMinutes": 45,
+        "quietHoursStart": 0,
+        "quietHoursEnd": 0,
+        "quietHoursEnabled": false,
+        "popupCorner": "bottomLeft",
+        "launchAtLogin": true
+      }
+      """
+    let s = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+    XCTAssertEqual(s.intervalMinutes, 45)
+    XCTAssertEqual(s.popupCorner, .bottomLeft)
+    XCTAssertTrue(s.launchAtLogin)
+    XCTAssertEqual(s.batchSize, 1)
   }
 }
 

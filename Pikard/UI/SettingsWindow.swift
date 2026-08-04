@@ -8,6 +8,7 @@ struct SettingsView: View {
     Form {
       Section("Schedule") {
         intervalRow
+        batchRow
       }
 
       Section("Quiet hours") {
@@ -31,6 +32,13 @@ struct SettingsView: View {
           }
         }
         .pickerStyle(.menu)
+
+        Toggle(
+          "Dismiss when I click outside",
+          isOn: $appState.settings.dismissOnOutsideClick)
+        Text("Off: a card stays until you grade or dismiss it.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
 
       Section("Startup") {
@@ -38,7 +46,7 @@ struct SettingsView: View {
       }
     }
     .formStyle(.grouped)
-    .frame(width: 420, height: 380)
+    .frame(width: 420, height: 440)
   }
 
   private var intervalRow: some View {
@@ -50,7 +58,31 @@ struct SettingsView: View {
           .foregroundStyle(.secondary)
           .monospacedDigit()
       }
-      Slider(value: $appState.settings.intervalMinutes, in: 5...120, step: 1)
+      Slider(value: $appState.settings.intervalMinutes, in: 5...120, step: 5)
+    }
+  }
+
+  private var batchRow: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Stepper(
+        value: $appState.settings.batchSize,
+        in: 1...AppSettings.maxBatchSize
+      ) {
+        HStack {
+          Text("Cards per popup")
+          Spacer()
+          Text("\(appState.settings.batchSize)")
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+      }
+      Text(
+        appState.settings.batchSize > 1
+          ? "Grading a card brings up the next one; dismissing with ✕ ends the batch."
+          : "One card per popup."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
     }
   }
 }

@@ -4,6 +4,8 @@ struct CardView: View {
 
   let card: Card
   let deckName: String
+  /// Position within a batch run, e.g. "2/5". Nil when batching is off.
+  let batchLabel: String?
   let onGrade: (Grade) -> Void
   let onDismiss: () -> Void
 
@@ -17,11 +19,13 @@ struct CardView: View {
     card: Card,
     deckName: String,
     promptSide: Deck.PromptSide = .front,
+    batchLabel: String? = nil,
     onGrade: @escaping (Grade) -> Void,
     onDismiss: @escaping () -> Void
   ) {
     self.card = card
     self.deckName = deckName
+    self.batchLabel = batchLabel
     self.onGrade = onGrade
     self.onDismiss = onDismiss
     switch promptSide {
@@ -151,13 +155,20 @@ struct CardView: View {
 
   private var deckLabel: some View {
     VStack {
-      HStack {
+      HStack(spacing: 6) {
         Text(deckName)
           .font(.caption)
           .fontWeight(.medium)
           .foregroundStyle(.secondary)
           .lineLimit(1)
           .truncationMode(.tail)
+        if let batchLabel {
+          Text(batchLabel)
+            .font(.caption2)
+            .monospacedDigit()
+            .foregroundStyle(.tertiary)
+            .layoutPriority(1)
+        }
         Spacer(minLength: 0)
       }
       Spacer(minLength: 0)
@@ -211,5 +222,14 @@ struct CardView: View {
     card: Card(front: "Bonjour", back: "Hello"),
     deckName: "French Basics",
     promptSide: .back,
+    onGrade: { _ in }, onDismiss: {})
+}
+
+#Preview("In a batch") {
+  CardView(
+    card: Card(front: "Bonjour", back: "Hello"),
+    deckName: "French Basics",
+    promptSide: .front,
+    batchLabel: "2/5",
     onGrade: { _ in }, onDismiss: {})
 }

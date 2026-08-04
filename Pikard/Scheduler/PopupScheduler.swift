@@ -27,6 +27,15 @@ final class PopupScheduler: ObservableObject {
   // MARK: GCD
   private var timer: DispatchSourceTimer?
 
+  // MARK: Batch run
+  /// Cards still allowed in the run currently on screen (0 = no run in flight).
+  private var runRemaining = 0
+  /// Total size of the run on screen, for the "2/5" label.
+  private var runTotal = 1
+  /// Cards already shown in this run, so a re-scheduled card can't come back
+  /// around within the same batch.
+  private var runShown: Set<UUID> = []
+
   init(appState: AppState, popup: PopupController) {
     self.appState = appState
     self.popup = popup
@@ -161,26 +170,112 @@ extension PopupScheduler {
       return
     }
 
-    if let next = SRSAlgorithm.selectNextCard(decks: appState.decks) {
-      let deck = appState.decks.first { $0.id == next.deckId }
-      let side = deck?.promptSide ?? .front
+    if !showCardRun() {
+      // Nothing to show; wait one more interval and try again.
+      scheduleNext()
+    }
+  }
+}
+
+// MARK: - Card runs (batching)
+
+extension PopupScheduler {
+
+  /// Show a card now and, when `batchSize > 1`, keep swapping in the next due
+  /// card as each one is graded Known / Still learning. A neutral dismissal (the
+  /// ✕ or an outside click) ends the run early, as does running out of due cards.
+  /// The cadence is reset from the moment the run finishes.
+  ///
+  /// Returns false when there was nothing at all to show, letting the caller
+  /// decide what to do instead (reschedule, or show the empty state).
+  @discardableResult
+  func showCardRun() -> Bool {
+    // A popup already on screen counts as "showing something".
+    guard !popup.isVisible else { return true }
+
+    guard let first = SRSAlgorithm.selectNextCard(decks: appState.decks) else {
+      endRun(reschedule: false)
+      return false
+    }
+
+    // Cap the run at what's actually due, so the "2/5" counter never promises
+    // cards the corpus can't deliver. (`first` may itself be a not-yet-due
+    // fallback card, in which case the run is just that one card.)
+    runTotal = min(
+      appState.settings.cardsPerRun,
+      max(1, SRSAlgorithm.dueCount(decks: appState.decks)))
+    runRemaining = runTotal
+    runShown = []
+    present(first, replacingPanel: false)
+    return true
+  }
+
+  private func present(_ next: (card: Card, deckId: UUID), replacingPanel: Bool) {
+    runRemaining -= 1
+    runShown.insert(next.card.id)
+
+    let deck = appState.decks.first { $0.id == next.deckId }
+    let side = deck?.promptSide ?? .front
+    // "2/5" only while batching; a single-card run keeps the plain card.
+    let label = runTotal > 1 ? "\(runShown.count)/\(runTotal)" : nil
+
+    let onGrade: (Grade) -> Void = { [weak self] grade in
+      guard let self else { return }
+      appState.grade(card: next.card, in: next.deckId, as: grade)
+      advanceRun()
+    }
+    // Neutral dismissal stops the batch. The popup closes itself.
+    let onDismiss: () -> Void = { [weak self] in
+      guard let self else { return }
+      appState.grade(card: next.card, in: next.deckId, as: .neutralDismiss)
+      endRun(reschedule: true)
+    }
+
+    if replacingPanel {
+      let replaced = popup.replace(
+        card: next.card,
+        deckName: deck?.name ?? "",
+        promptSide: side,
+        dismissOnOutsideClick: appState.settings.dismissOnOutsideClick,
+        batchLabel: label,
+        onGrade: onGrade,
+        onDismiss: onDismiss)
+      // The panel went away under us (e.g. dismissed mid-animation): stop here.
+      if !replaced { endRun(reschedule: true) }
+    } else {
       popup.show(
         card: next.card,
         deckName: deck?.name ?? "",
         promptSide: side,
         corner: appState.settings.popupCorner,
-        onGrade: { [weak self] grade in
-          self?.appState.grade(card: next.card, in: next.deckId, as: grade)
-          self?.scheduleNext()
-        },
-        onDismiss: { [weak self] in
-          self?.appState.grade(card: next.card, in: next.deckId, as: .neutralDismiss)
-          self?.scheduleNext()
-        }
-      )
-    } else {
-      // Nothing to show; wait one more interval and try again.
-      scheduleNext()
+        dismissOnOutsideClick: appState.settings.dismissOnOutsideClick,
+        batchLabel: label,
+        onGrade: onGrade,
+        onDismiss: onDismiss)
     }
+  }
+
+  /// Called after a Known / Still-learning grade: pull the next due card into the
+  /// same panel, or close it and reset the cadence if the run is over.
+  private func advanceRun() {
+    // Screen sharing may have started mid-run; don't put another card on a
+    // shared screen just because the previous one was already up.
+    guard !ScreenShareDetector.isScreenBeingCaptured,
+      runRemaining > 0,
+      let next = SRSAlgorithm.selectNextDueCard(
+        decks: appState.decks, excluding: runShown)
+    else {
+      popup.dismiss()
+      endRun(reschedule: true)
+      return
+    }
+    present(next, replacingPanel: true)
+  }
+
+  private func endRun(reschedule: Bool) {
+    runRemaining = 0
+    runTotal = 1
+    runShown = []
+    if reschedule { scheduleNext() }
   }
 }

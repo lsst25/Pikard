@@ -203,29 +203,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   // MARK: Actions
 
   @objc private func showNextCardNow() {
-    if let next = SRSAlgorithm.selectNextCard(decks: appState.decks) {
-      let deck = appState.decks.first { $0.id == next.deckId }
-      let side = deck?.promptSide ?? .front
-      popup.show(
-        card: next.card,
-        deckName: deck?.name ?? "",
-        promptSide: side,
-        corner: appState.settings.popupCorner,
-        onGrade: { [weak self] grade in
-          self?.appState.grade(card: next.card, in: next.deckId, as: grade)
-          self?.scheduler.fireNowOrReschedule()  // reset cadence from this moment
-        },
-        onDismiss: { [weak self] in
-          self?.appState.grade(card: next.card, in: next.deckId, as: .neutralDismiss)
-          self?.scheduler.fireNowOrReschedule()
-        })
-    } else {
-      let message =
-        appState.decks.isEmpty
-        ? "Import a deck to get started."
-        : caughtUpLabel()
-      popup.showEmptyState(message: message, corner: appState.settings.popupCorner)
-    }
+    // One shared path with the timer-driven popup: batching, grading and the
+    // cadence reset all live in the scheduler.
+    if scheduler.showCardRun() { return }
+
+    let message =
+      appState.decks.isEmpty
+      ? "Import a deck to get started."
+      : caughtUpLabel()
+    popup.showEmptyState(message: message, corner: appState.settings.popupCorner)
   }
 
   private func caughtUpLabel() -> String {

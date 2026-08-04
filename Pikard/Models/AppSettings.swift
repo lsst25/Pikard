@@ -5,6 +5,12 @@ struct AppSettings: Codable, Equatable {
   /// Minutes between popups. Spec default: 20.
   var intervalMinutes: Double = 20
 
+  /// How many cards one popup run walks through back-to-back. 1 = the classic
+  /// single-card popup. Higher values let you use a longer interval and then
+  /// clear a short batch in one sitting: each Known / Still-learning grade
+  /// swaps in the next due card instead of closing the popup.
+  var batchSize: Int = 1
+
   /// Start of the quiet window (time-of-day; the date part is ignored).
   var quietHoursStart: Date = AppSettings.defaultTime(hour: 22)
 
@@ -17,8 +23,40 @@ struct AppSettings: Codable, Equatable {
   /// Which corner the popup appears in.
   var popupCorner: PopupCorner = .topRight
 
+  /// Whether clicking outside the popup dismisses it. Off by default so a card
+  /// stays put until you grade or dismiss it, rather than vanishing the moment
+  /// you click back into your work.
+  var dismissOnOutsideClick: Bool = false
+
   /// Whether the app registers itself to launch at login.
   var launchAtLogin: Bool = false
+
+  init() {}
+
+  // Migration-safe decode: back-fill any key missing from older settings.json
+  // (a synthesized decoder would throw on the first absent key and reset every
+  // setting to its default). See `Deck.init(from:)` for the same pattern.
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    let d = AppSettings()
+    intervalMinutes =
+      try c.decodeIfPresent(Double.self, forKey: .intervalMinutes) ?? d.intervalMinutes
+    batchSize =
+      try c.decodeIfPresent(Int.self, forKey: .batchSize) ?? d.batchSize
+    quietHoursStart =
+      try c.decodeIfPresent(Date.self, forKey: .quietHoursStart) ?? d.quietHoursStart
+    quietHoursEnd =
+      try c.decodeIfPresent(Date.self, forKey: .quietHoursEnd) ?? d.quietHoursEnd
+    quietHoursEnabled =
+      try c.decodeIfPresent(Bool.self, forKey: .quietHoursEnabled) ?? d.quietHoursEnabled
+    popupCorner =
+      try c.decodeIfPresent(PopupCorner.self, forKey: .popupCorner) ?? d.popupCorner
+    dismissOnOutsideClick =
+      try c.decodeIfPresent(Bool.self, forKey: .dismissOnOutsideClick)
+      ?? d.dismissOnOutsideClick
+    launchAtLogin =
+      try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
+  }
 
   enum PopupCorner: String, Codable, CaseIterable, Identifiable {
     case topLeft, topRight, bottomLeft, bottomRight
@@ -40,6 +78,12 @@ struct AppSettings: Codable, Equatable {
 }
 
 extension AppSettings {
+
+  /// Upper bound on `batchSize`, shared by the settings UI and the scheduler.
+  static let maxBatchSize = 20
+
+  /// `batchSize` clamped to a usable range — persisted JSON can hold anything.
+  var cardsPerRun: Int { min(Self.maxBatchSize, max(1, batchSize)) }
 
   /// True if `now`'s time-of-day falls within [start, end), where the window
   /// may cross midnight. Returns false when quiet hours are disabled.
