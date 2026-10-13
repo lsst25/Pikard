@@ -95,6 +95,7 @@ struct StudyView: View {
         StudyCardView(
           card: card,
           deckName: item.deckName,
+          boxCount: appState.settings.effectiveBoxIntervals.count,
           promptIsFront: item.promptIsFront,
           showingAnswer: session.showingAnswer,
           onFlip: { session.flip() })
@@ -243,6 +244,7 @@ private struct StudyCardView: View {
 
   let card: Card
   let deckName: String
+  let boxCount: Int
   let promptIsFront: Bool
   let showingAnswer: Bool
   let onFlip: () -> Void
@@ -322,9 +324,9 @@ private struct StudyCardView: View {
       Spacer()
       HStack {
         Circle()
-          .fill(StudyView.boxColor(card.srs.box))
+          .fill(BoxColor.color(box: card.srs.box, boxCount: boxCount))
           .frame(width: 9, height: 9)
-          .help("Leitner box \(card.srs.box)")
+          .help(BoxColor.label(box: card.srs.box, boxCount: boxCount))
         Spacer()
       }
     }
@@ -387,16 +389,6 @@ private struct StudySummaryView: View {
 
 extension StudyView {
   /// Leitner-box colour, matching the popup card's box dot.
-  static func boxColor(_ box: Int) -> Color {
-    switch box {
-    case 0: return .red
-    case 1: return .orange
-    case 2: return .yellow
-    case 3: return .blue
-    case 4: return .indigo
-    default: return .green
-    }
-  }
 }
 
 #Preview {

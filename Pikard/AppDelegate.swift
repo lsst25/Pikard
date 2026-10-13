@@ -215,11 +215,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func caughtUpLabel() -> String {
-    guard let next = scheduler.nextFire else { return "All caught up." }
-    let minutes = max(0, Int(next.timeIntervalSinceNow / 60))
-    return minutes == 0
-      ? "All caught up — next card any moment."
-      : "All caught up — next card in \(minutes) min."
+    // Nothing was shown, so nothing is due: report when the next card *becomes*
+    // due, which is what the user is actually waiting on.
+    guard let due = SRSAlgorithm.nextDueDate(decks: appState.decks) else {
+      return "All caught up."
+    }
+    let seconds = due.timeIntervalSinceNow
+    if seconds < 60 { return "All caught up — next card due any moment." }
+    return "All caught up — next card due in \(Self.roughDuration(seconds))."
+  }
+
+  private static func roughDuration(_ seconds: TimeInterval) -> String {
+    let minutes = Int(seconds / 60)
+    if minutes < 60 { return "\(minutes) min" }
+    let hours = minutes / 60
+    if hours < 24 { return hours == 1 ? "1 hour" : "\(hours) hours" }
+    let days = hours / 24
+    return days == 1 ? "1 day" : "\(days) days"
   }
 
   @objc private func pauseSchedule() {

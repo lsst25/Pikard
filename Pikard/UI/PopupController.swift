@@ -30,6 +30,7 @@ final class PopupController {
     deckName: String,
     promptSide: Deck.PromptSide = .front,
     corner: AppSettings.PopupCorner = .topRight,
+    boxCount: Int = AppSettings.defaultBoxIntervals.count,
     dismissOnOutsideClick: Bool = false,
     batchLabel: String? = nil,
     onGrade: @escaping (Grade) -> Void,
@@ -42,6 +43,7 @@ final class PopupController {
         card: card,
         deckName: deckName,
         promptSide: promptSide,
+        boxCount: boxCount,
         batchLabel: batchLabel,
         onGrade: onGrade,
         onDismiss: onDismiss))
@@ -63,6 +65,7 @@ final class PopupController {
     card: Card,
     deckName: String,
     promptSide: Deck.PromptSide = .front,
+    boxCount: Int = AppSettings.defaultBoxIntervals.count,
     dismissOnOutsideClick: Bool = false,
     batchLabel: String? = nil,
     onGrade: @escaping (Grade) -> Void,
@@ -76,6 +79,7 @@ final class PopupController {
       card: card,
       deckName: deckName,
       promptSide: promptSide,
+      boxCount: boxCount,
       batchLabel: batchLabel,
       onGrade: onGrade,
       onDismiss: onDismiss)
@@ -95,6 +99,7 @@ final class PopupController {
     card: Card,
     deckName: String,
     promptSide: Deck.PromptSide,
+    boxCount: Int,
     batchLabel: String?,
     onGrade: @escaping (Grade) -> Void,
     onDismiss: @escaping () -> Void
@@ -103,6 +108,7 @@ final class PopupController {
       card: card,
       deckName: deckName,
       promptSide: promptSide,
+      boxCount: boxCount,
       batchLabel: batchLabel,
       onGrade: onGrade,
       onDismiss: { [weak self] in

@@ -4,6 +4,9 @@ struct CardView: View {
 
   let card: Card
   let deckName: String
+  /// How many Leitner boxes are configured, so the box dot's colour ramp spans
+  /// the whole ladder.
+  let boxCount: Int
   /// Position within a batch run, e.g. "2/5". Nil when batching is off.
   let batchLabel: String?
   let onGrade: (Grade) -> Void
@@ -19,12 +22,14 @@ struct CardView: View {
     card: Card,
     deckName: String,
     promptSide: Deck.PromptSide = .front,
+    boxCount: Int = AppSettings.defaultBoxIntervals.count,
     batchLabel: String? = nil,
     onGrade: @escaping (Grade) -> Void,
     onDismiss: @escaping () -> Void
   ) {
     self.card = card
     self.deckName = deckName
+    self.boxCount = boxCount
     self.batchLabel = batchLabel
     self.onGrade = onGrade
     self.onDismiss = onDismiss
@@ -192,14 +197,7 @@ struct CardView: View {
   }
 
   private var boxColor: Color {
-    switch card.srs.box {
-    case 0: return .red
-    case 1: return .orange
-    case 2: return .yellow
-    case 3: return .blue
-    case 4: return .indigo
-    default: return .green
-    }
+    BoxColor.color(box: card.srs.box, boxCount: boxCount)
   }
 
   private func flip() {

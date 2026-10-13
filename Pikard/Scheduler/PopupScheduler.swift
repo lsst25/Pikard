@@ -193,7 +193,11 @@ extension PopupScheduler {
     // A popup already on screen counts as "showing something".
     guard !popup.isVisible else { return true }
 
-    guard let first = SRSAlgorithm.selectNextCard(decks: appState.decks) else {
+    guard
+      let first = SRSAlgorithm.selectNextCard(
+        decks: appState.decks,
+        fallbackToUpcoming: appState.settings.showUpcomingWhenNothingDue)
+    else {
       endRun(reschedule: false)
       return false
     }
@@ -216,6 +220,7 @@ extension PopupScheduler {
 
     let deck = appState.decks.first { $0.id == next.deckId }
     let side = deck?.promptSide ?? .front
+    let boxCount = appState.settings.effectiveBoxIntervals.count
     // "2/5" only while batching; a single-card run keeps the plain card.
     let label = runTotal > 1 ? "\(runShown.count)/\(runTotal)" : nil
 
@@ -236,6 +241,7 @@ extension PopupScheduler {
         card: next.card,
         deckName: deck?.name ?? "",
         promptSide: side,
+        boxCount: boxCount,
         dismissOnOutsideClick: appState.settings.dismissOnOutsideClick,
         batchLabel: label,
         onGrade: onGrade,
@@ -248,6 +254,7 @@ extension PopupScheduler {
         deckName: deck?.name ?? "",
         promptSide: side,
         corner: appState.settings.popupCorner,
+        boxCount: boxCount,
         dismissOnOutsideClick: appState.settings.dismissOnOutsideClick,
         batchLabel: label,
         onGrade: onGrade,

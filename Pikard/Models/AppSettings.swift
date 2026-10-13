@@ -31,6 +31,16 @@ struct AppSettings: Codable, Equatable {
   /// Whether the app registers itself to launch at login.
   var launchAtLogin: Bool = false
 
+  /// Review interval for each Leitner box, in seconds. A card graded Known moves
+  /// up one box and comes back after that box's interval; the last box is where
+  /// learned cards settle, so its interval is the longest gap a card ever gets.
+  /// Between 1 and `maxBoxes` entries — see `effectiveBoxIntervals` for the sanitized view.
+  var boxIntervals: [TimeInterval] = AppSettings.defaultBoxIntervals
+
+  /// When nothing is due, whether a popup still shows the soonest-upcoming card
+  /// (the original behaviour) or stays silent until a card is actually due.
+  var showUpcomingWhenNothingDue: Bool = true
+
   init() {}
 
   // Migration-safe decode: back-fill any key missing from older settings.json
@@ -56,6 +66,11 @@ struct AppSettings: Codable, Equatable {
       ?? d.dismissOnOutsideClick
     launchAtLogin =
       try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
+    boxIntervals =
+      try c.decodeIfPresent([TimeInterval].self, forKey: .boxIntervals) ?? d.boxIntervals
+    showUpcomingWhenNothingDue =
+      try c.decodeIfPresent(Bool.self, forKey: .showUpcomingWhenNothingDue)
+      ?? d.showUpcomingWhenNothingDue
   }
 
   enum PopupCorner: String, Codable, CaseIterable, Identifiable {
@@ -84,6 +99,32 @@ extension AppSettings {
 
   /// `batchSize` clamped to a usable range — persisted JSON can hold anything.
   var cardsPerRun: Int { min(Self.maxBatchSize, max(1, batchSize)) }
+
+  /// The Leitner ladder the app shipped with: 5 min → 7 days over six boxes.
+  static let defaultBoxIntervals: [TimeInterval] = [
+    5 * 60,
+    30 * 60,
+    4 * 3600,
+    24 * 3600,
+    3 * 24 * 3600,
+    7 * 24 * 3600,
+  ]
+
+  /// Upper bound on the number of boxes, shared by the settings UI and the SRS.
+  static let maxBoxes = 25
+
+  /// Shortest interval a box may have (one minute).
+  static let minBoxInterval: TimeInterval = 60
+
+  /// `boxIntervals` made safe to schedule with: never empty, at most `maxBoxes`
+  /// entries, every entry at least `minBoxInterval`, and no non-finite values —
+  /// persisted JSON can hold anything.
+  var effectiveBoxIntervals: [TimeInterval] {
+    let cleaned = boxIntervals
+      .prefix(Self.maxBoxes)
+      .map { $0.isFinite ? max(Self.minBoxInterval, $0) : Self.minBoxInterval }
+    return cleaned.isEmpty ? Self.defaultBoxIntervals : Array(cleaned)
+  }
 
   /// True if `now`'s time-of-day falls within [start, end), where the window
   /// may cross midnight. Returns false when quiet hours are disabled.

@@ -11,6 +11,28 @@ struct SettingsView: View {
         batchRow
       }
 
+      Section("Learning intervals") {
+        BoxIntervalsEditor(intervals: $appState.settings.boxIntervals)
+        Text(
+          "Known moves a card up one box and brings it back after that box's "
+            + "interval; Still learning moves it down one. The last box is where "
+            + "learned cards settle. Up to \(AppSettings.maxBoxes) boxes."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+        Toggle(
+          "Show an upcoming card when nothing is due",
+          isOn: $appState.settings.showUpcomingWhenNothingDue)
+        Text(
+          appState.settings.showUpcomingWhenNothingDue
+            ? "A popup always shows something, even a card that isn't due yet."
+            : "Popups stay quiet until a card is actually due."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
+
       Section("Quiet hours") {
         Toggle("Enable quiet hours", isOn: $appState.settings.quietHoursEnabled)
         if appState.settings.quietHoursEnabled {
@@ -46,7 +68,7 @@ struct SettingsView: View {
       }
     }
     .formStyle(.grouped)
-    .frame(width: 420, height: 440)
+    .frame(width: 440, height: 640)
   }
 
   private var intervalRow: some View {

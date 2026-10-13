@@ -173,6 +173,7 @@ struct DeckDetailView: View {
             ForEach(deck.cards) { card in
               CardRowEditor(
                 card: card,
+                boxCount: appState.settings.effectiveBoxIntervals.count,
                 onChange: { front, back in
                   appState.setCardText(
                     cardId: card.id, in: deckID, front: front, back: back)
@@ -209,6 +210,7 @@ struct DeckDetailView: View {
 struct CardRowEditor: View {
 
   let card: Card
+  let boxCount: Int
   let onChange: (String, String) -> Void
   let onDelete: () -> Void
 
@@ -217,10 +219,12 @@ struct CardRowEditor: View {
 
   init(
     card: Card,
+    boxCount: Int = AppSettings.defaultBoxIntervals.count,
     onChange: @escaping (String, String) -> Void,
     onDelete: @escaping () -> Void
   ) {
     self.card = card
+    self.boxCount = boxCount
     self.onChange = onChange
     self.onDelete = onDelete
     _front = State(initialValue: card.front)
@@ -232,7 +236,7 @@ struct CardRowEditor: View {
       Circle()
         .fill(boxColor)
         .frame(width: 7, height: 7)
-        .help("Leitner box \(card.srs.box)")
+        .help(BoxColor.label(box: card.srs.box, boxCount: boxCount))
 
       TextField("Front", text: $front)
         .textFieldStyle(.roundedBorder)
@@ -251,14 +255,7 @@ struct CardRowEditor: View {
   }
 
   private var boxColor: Color {
-    switch card.srs.box {
-    case 0: return .red
-    case 1: return .orange
-    case 2: return .yellow
-    case 3: return .blue
-    case 4: return .indigo
-    default: return .green
-    }
+    BoxColor.color(box: card.srs.box, boxCount: boxCount)
   }
 }
 

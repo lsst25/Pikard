@@ -228,6 +228,130 @@ final class SRSAlgorithmTests: XCTestCase {
 
     XCTAssertEqual(SRSAlgorithm.dueCount(decks: [active, inactive], now: now), 1)
   }
+  // MARK: Configurable ladder
+
+  func test_gradeUsesCustomIntervals() {
+    let now = Date()
+    let ladder: [TimeInterval] = [60, 600, 36_000]
+    var state = SRSState()
+    state.box = 0
+
+    let next = SRSAlgorithm.grade(state, as: .known, intervals: ladder, now: now)
+
+    XCTAssertEqual(next.box, 1)
+    XCTAssertEqual(next.dueAt.timeIntervalSince(now), 600, accuracy: 0.001)
+  }
+
+  func test_knownCapsAtLastCustomBox() {
+    let now = Date()
+    let ladder: [TimeInterval] = [60, 600, 36_000]
+    var state = SRSState()
+    state.box = 2
+
+    let next = SRSAlgorithm.grade(state, as: .known, intervals: ladder, now: now)
+
+    XCTAssertEqual(next.box, 2)
+    XCTAssertEqual(next.dueAt.timeIntervalSince(now), 36_000, accuracy: 0.001)
+  }
+
+  // A card graded under a taller ladder sits in a box that no longer exists
+  // after the user removes boxes: treat it as the last remaining box.
+  func test_boxBeyondLadderIsClampedOnGrade() {
+    let now = Date()
+    let ladder: [TimeInterval] = [60, 600, 36_000]
+    var state = SRSState()
+    state.box = 9
+
+    let known = SRSAlgorithm.grade(state, as: .known, intervals: ladder, now: now)
+    XCTAssertEqual(known.box, 2)
+    XCTAssertEqual(known.dueAt.timeIntervalSince(now), 36_000, accuracy: 0.001)
+
+    let learning = SRSAlgorithm.grade(state, as: .stillLearning, intervals: ladder, now: now)
+    XCTAssertEqual(learning.box, 1)
+
+    let dismissed = SRSAlgorithm.grade(state, as: .neutralDismiss, intervals: ladder, now: now)
+    XCTAssertEqual(dismissed.box, 2)
+  }
+
+  func test_singleBoxLadderNeverMoves() {
+    let now = Date()
+    let ladder: [TimeInterval] = [900]
+    var state = SRSState()
+    state.box = 0
+
+    let known = SRSAlgorithm.grade(state, as: .known, intervals: ladder, now: now)
+    XCTAssertEqual(known.box, 0)
+    XCTAssertEqual(known.dueAt.timeIntervalSince(now), 900, accuracy: 0.001)
+
+    let learning = SRSAlgorithm.grade(known, as: .stillLearning, intervals: ladder, now: now)
+    XCTAssertEqual(learning.box, 0)
+  }
+
+  func test_emptyLadderFallsBackToDefaults() {
+    let now = Date()
+    let next = SRSAlgorithm.grade(SRSState(), as: .known, intervals: [], now: now)
+    XCTAssertEqual(next.box, 1)
+    XCTAssertEqual(
+      next.dueAt.timeIntervalSince(now),
+      SRSAlgorithm.defaultIntervals[1],
+      accuracy: 0.001)
+  }
+
+  func test_defaultLadderMatchesSettingsDefault() {
+    XCTAssertEqual(SRSAlgorithm.defaultIntervals, AppSettings.defaultBoxIntervals)
+  }
+
+  func test_clampedBox() {
+    let ladder: [TimeInterval] = [1, 2, 3]
+    XCTAssertEqual(SRSAlgorithm.clampedBox(-1, intervals: ladder), 0)
+    XCTAssertEqual(SRSAlgorithm.clampedBox(1, intervals: ladder), 1)
+    XCTAssertEqual(SRSAlgorithm.clampedBox(7, intervals: ladder), 2)
+    XCTAssertEqual(SRSAlgorithm.clampedBox(7, intervals: []), 0)
+  }
+
+  // MARK: Upcoming-card fallback
+
+  func test_noFallbackReturnsNilWhenNothingDue() {
+    let now = Date()
+    var future = Card(front: "A", back: "1")
+    future.srs.dueAt = now.addingTimeInterval(60)
+    let deck = Deck(name: "Test", cards: [future])
+
+    XCTAssertNil(
+      SRSAlgorithm.selectNextCard(decks: [deck], fallbackToUpcoming: false, now: now))
+    XCTAssertNotNil(
+      SRSAlgorithm.selectNextCard(decks: [deck], fallbackToUpcoming: true, now: now))
+  }
+
+  func test_noFallbackStillReturnsDueCards() {
+    let now = Date()
+    var due = Card(front: "A", back: "1")
+    due.srs.dueAt = now.addingTimeInterval(-60)
+    let deck = Deck(name: "Test", cards: [due])
+
+    let picked = SRSAlgorithm.selectNextCard(
+      decks: [deck], fallbackToUpcoming: false, now: now)
+    XCTAssertEqual(picked?.card.front, "A")
+  }
+
+  func test_nextDueDateIsSoonestActiveCard() {
+    let now = Date()
+    var later = Card(front: "A", back: "1")
+    later.srs.dueAt = now.addingTimeInterval(3600)
+    var sooner = Card(front: "B", back: "2")
+    sooner.srs.dueAt = now.addingTimeInterval(60)
+    var hidden = Card(front: "C", back: "3")
+    hidden.srs.dueAt = now.addingTimeInterval(-10)
+
+    let active = Deck(name: "On", cards: [later, sooner])
+    var inactive = Deck(name: "Off", cards: [hidden])
+    inactive.isActive = false
+
+    XCTAssertEqual(
+      SRSAlgorithm.nextDueDate(decks: [active, inactive]), sooner.srs.dueAt)
+    XCTAssertNil(SRSAlgorithm.nextDueDate(decks: [inactive]))
+    XCTAssertNil(SRSAlgorithm.nextDueDate(decks: []))
+  }
 }
 
 final class StudySessionTests: XCTestCase {
@@ -404,6 +528,58 @@ final class AppSettingsTests: XCTestCase {
     XCTAssertEqual(s.popupCorner, .bottomLeft)
     XCTAssertTrue(s.launchAtLogin)
     XCTAssertEqual(s.batchSize, 1)
+  }
+
+  func test_defaultLadderIsTheOriginalSixBoxes() {
+    let s = AppSettings()
+    let expected: [TimeInterval] = [300, 1800, 14_400, 86_400, 259_200, 604_800]
+    XCTAssertEqual(s.boxIntervals, expected)
+    XCTAssertEqual(s.effectiveBoxIntervals, s.boxIntervals)
+    XCTAssertTrue(s.showUpcomingWhenNothingDue)
+    XCTAssertEqual(AppSettings.maxBoxes, 25)
+  }
+
+  func test_effectiveBoxIntervalsClampsGarbage() {
+    var s = AppSettings()
+
+    s.boxIntervals = []
+    XCTAssertEqual(s.effectiveBoxIntervals, AppSettings.defaultBoxIntervals)
+
+    s.boxIntervals = [5, 0, -30, .nan, .infinity, 3600]
+    XCTAssertEqual(s.effectiveBoxIntervals, [60, 60, 60, 60, 60, 3600])
+
+    s.boxIntervals = Array(repeating: 120, count: 40)
+    XCTAssertEqual(s.effectiveBoxIntervals.count, AppSettings.maxBoxes)
+  }
+
+  func test_codableRoundTripKeepsLadder() throws {
+    var s = AppSettings()
+    s.boxIntervals = [60, 120, 240]
+    s.showUpcomingWhenNothingDue = false
+    let data = try JSONEncoder().encode(s)
+    let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+    XCTAssertEqual(decoded, s)
+  }
+
+  // Settings saved before the ladder was configurable must load with the
+  // original six boxes and the original "always show something" behaviour.
+  func test_decodesLegacySettingsWithoutLadder() throws {
+    let json = """
+      {
+        "intervalMinutes": 20,
+        "batchSize": 3,
+        "quietHoursStart": 0,
+        "quietHoursEnd": 0,
+        "quietHoursEnabled": false,
+        "popupCorner": "topRight",
+        "dismissOnOutsideClick": false,
+        "launchAtLogin": false
+      }
+      """
+    let s = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+    XCTAssertEqual(s.boxIntervals, AppSettings.defaultBoxIntervals)
+    XCTAssertTrue(s.showUpcomingWhenNothingDue)
+    XCTAssertEqual(s.batchSize, 3)
   }
 }
 

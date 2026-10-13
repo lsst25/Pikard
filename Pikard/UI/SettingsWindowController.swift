@@ -11,7 +11,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     self.onWindowClose = onWindowClose
 
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 420, height: 380),
+      contentRect: NSRect(x: 0, y: 0, width: 440, height: 640),
       styleMask: [.titled, .closable],
       backing: .buffered,
       defer: false

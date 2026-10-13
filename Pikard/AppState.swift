@@ -119,7 +119,8 @@ final class AppState: ObservableObject {
     guard let cardIdx = decks[deckIdx].cards.firstIndex(where: { $0.id == card.id })
     else { return }
     var updated = decks[deckIdx].cards[cardIdx]
-    updated.srs = SRSAlgorithm.grade(updated.srs, as: grade)
+    updated.srs = SRSAlgorithm.grade(
+      updated.srs, as: grade, intervals: settings.effectiveBoxIntervals)
     decks[deckIdx].cards[cardIdx] = updated
     persist()
   }
